@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Secure QR Payment</title>
+  <script src="storage.js"></script>
+  <style>
+    :root {
+      --bg-start: #060d1f;
+      --bg-mid:   #0d1f3c;
+      --bg-end:   #0a1628;
+      --card:     #ffffff;
+      --primary:  #2563eb;
+      --primary-dark: #1d4ed8;
+      --primary-glow: rgba(37,99,235,0.35);
+      --success:  #16a34a;
+      --danger:   #dc2626;
+      --muted:    #6b7280;
+      --border:   #e5e7eb;
+      --shadow:   0 25px 60px rgba(0,0,0,0.45);
+      --fp-red:   #d0021b;
+      --np-red:   #e8192c;
+      --np-blue:  #1a4fa0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: var(--bg-start);
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* ── Animated background ── */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 20%, rgba(37,99,235,0.15) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 80% at 80% 80%, rgba(99,37,200,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 50% at 50% 50%, rgba(16,163,127,0.06) 0%, transparent 70%);
+      animation: bgPulse 8s ease-in-out infinite alternate;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    @keyframes bgPulse {
+      from { opacity: 0.7; transform: scale(1); }
+      to   { opacity: 1;   transform: scale(1.04); }
+    }
+
+    /* Floating particles */
+    .particles {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .particle {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(37,99,235,0.18);
+      animation: floatUp linear infinite;
+    }
+    .particle:nth-child(1)  { width:4px;  height:4px;  left:10%; animation-duration:12s; animation-delay:0s;   }
+    .particle:nth-child(2)  { width:6px;  height:6px;  left:25%; animation-duration:18s; animation-delay:2s;   background:rgba(99,37,200,0.15); }
+    .particle:nth-child(3)  { width:3px;  height:3px;  left:40%; animation-duration:14s; animation-delay:4s;   }
+    .particle:nth-child(4)  { width:5px;  height:5px;  left:60%; animation-duration:16s; animation-delay:1s;   background:rgba(16,163,127,0.2); }
+    .particle:nth-child(5)  { width:4px;  height:4px;  left:75%; animation-duration:20s; animation-delay:3s;   }
+    .particle:nth-child(6)  { width:7px;  height:7px;  left:88%; animation-duration:15s; animation-delay:5s;   background:rgba(37,99,235,0.12); }
+    .particle:nth-child(7)  { width:3px;  height:3px;  left:5%;  animation-duration:22s; animation-delay:7s;   }
+    .particle:nth-child(8)  { width:5px;  height:5px;  left:50%; animation-duration:13s; animation-delay:9s;   background:rgba(99,37,200,0.1); }
+
+    @keyframes floatUp {
+      from { transform: translateY(110vh) scale(0.5); opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 0.6; }
+      to   { transform: translateY(-10vh) scale(1.2); opacity: 0; }
+    }
+
+    /* ── Card ── */
+    .card {
+      background: rgba(255,255,255,0.98);
+      width: 100%;
+      max-width: 430px;
+      border-radius: 24px;
+      box-shadow: var(--shadow), 0 0 0 1px rgba(255,255,255,0.08);
+      padding: 2rem 1.875rem;
+      position: relative;
+      z-index: 1;
+      animation: cardRise 0.5s cubic-bezier(0.16,1,0.3,1) both;
+      backdrop-filter: blur(2px);
+    }
+
+    /* subtle shimmer border */
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: 25px;
+      background: linear-gradient(135deg, rgba(37,99,235,0.4), rgba(99,37,200,0.2), rgba(37,99,235,0.1));
+      z-index: -1;
+      animation: borderShimmer 4s linear infinite;
+    }
+
+    @keyframes borderShimmer {
+      0%,100% { opacity: 0.6; }
+      50%      { opacity: 1;   }
+    }
+
+    @keyframes cardRise {
+      from { opacity: 0; transform: translateY(24px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0)    scale(1); }
+    }
+
+    /* ── Brand / header ── */
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 1.375rem;
+    }
+    .brand-icon {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(37,99,235,0.4);
+      animation: iconPulse 3s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes iconPulse {
+      0%,100% { box-shadow: 0 4px 12px rgba(37,99,235,0.4); }
+      50%      { box-shadow: 0 4px 20px rgba(37,99,235,0.65); }
+    }
+    .brand-icon svg { width: 22px; height: 22px; }
+    .brand-text h1  { font-size: 1.1rem; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; }
+    .brand-text p   { font-size: 0.72rem; color: var(--muted); font-weight: 500; }
+
+    /* Secure badge */
+    .secure-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 999px;
+      padding: 0.22rem 0.65rem;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #15803d;
+      letter-spacing: 0.3px;
+      margin-left: auto;
+      animation: securePop 0.6s 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+    .secure-badge svg { width: 11px; height: 11px; }
+    @keyframes securePop {
+      from { opacity:0; transform:scale(0.7); }
+      to   { opacity:1; transform:scale(1); }
+    }
+
+    /* ── Steps ── */
+    .step { display: none; }
+    .step.active { display: block; animation: stepIn 0.3s cubic-bezier(0.16,1,0.3,1) both; }
+    @keyframes stepIn {
+      from { opacity:0; transform:translateX(16px); }
+      to   { opacity:1; transform:translateX(0); }
+    }
+
+    h2 { font-size: 1.2rem; color: #0f172a; margin-bottom: 0.3rem; font-weight: 800; letter-spacing: -0.3px; }
+    .subtitle { color: var(--muted); font-size: 0.875rem; margin-bottom: 1.5rem; line-height: 1.45; }
+
+    label { display: block; font-size: 0.8rem; font-weight: 700; color: #374151; margin-bottom: 0.4rem; letter-spacing: 0.2px; }
+
+    /* Step dots */
+    .step-dots {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      margin-bottom: 1.5rem;
+    }
+    .step-dots .dot {
+      height: 4px;
+      border-radius: 999px;
+      background: var(--border);
+      transition: all 0.3s ease;
+      width: 24px;
+    }
+    .step-dots .dot.active { background: var(--primary); width: 36px; }
+    .step-dots .dot.done   { background: var(--success); }
+
+    /* ── Inputs ── */
+    .amount-wrap, .phone-wrap {
+      display: flex;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .amount-wrap:focus-within,
+    .phone-wrap:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px var(--primary-glow);
+    }
+    .amount-wrap .currency-prefix,
+    .phone-wrap .cc-prefix {
+      display: flex;
+      align-items: center;
+      background: #f8fafc;
+      padding: 0.8rem 0.875rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #374151;
+      border-right: 2px solid var(--border);
+      white-space: nowrap;
+    }
+    .amount-wrap input, .phone-wrap input {
+      flex: 1;
+      border: none;
+      padding: 0.8rem 0.875rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      outline: none;
+      width: 100%;
+      color: #0f172a;
+    }
+
+    .error { color: var(--danger); font-size: 0.78rem; min-height: 1rem; margin-top: 0.4rem; }
+
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      padding: 0.9rem;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      margin-top: 1.25rem;
+      letter-spacing: 0.1px;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(37,99,235,0.4);
+    }
+    .btn-primary:hover { box-shadow: 0 6px 20px rgba(37,99,235,0.5); transform: translateY(-1px); }
+    .btn-ghost { background: #f3f4f6; color: #374151; }
+    .btn-ghost:hover { background: #e5e7eb; }
+
+    /* ── QR choice cards ── */
+    .qr-choice-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .qr-choice-card {
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      padding: 1.1rem 0.75rem 0.9rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+      user-select: none;
+      background: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+    .qr-choice-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 60%, rgba(37,99,235,0.04));
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .qr-choice-card:hover {
+      border-color: #93c5fd;
+      box-shadow: 0 4px 16px rgba(37,99,235,0.12);
+      transform: translateY(-2px);
+    }
+    .qr-choice-card:hover::after { opacity: 1; }
+    .qr-choice-card.selected {
+      border-color: var(--primary);
+      background: #eff6ff;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.15), 0 4px 16px rgba(37,99,235,0.15);
+      transform: translateY(-2px);
+    }
+    .qr-choice-card .logo-wrap {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.5rem;
+    }
+    .qr-choice-card .logo-wrap svg,
+    .qr-choice-card .logo-wrap img {
+      max-height: 40px;
+      max-width: 100%;
+    }
+    .qr-choice-card .choice-sub {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+    }
+    .qr-choice-card.selected .choice-check {
+      display: flex;
+    }
+    .choice-check {
+      display: none;
+      position: absolute;
+      top: 8px; right: 8px;
+      width: 18px; height: 18px;
+      background: var(--primary);
+      border-radius: 50%;
+      align-items: center;
+      justify-content: center;
+    }
+    .choice-check svg { width: 10px; height: 10px; }
+    .choice-err { color: var(--danger); font-size: 0.78rem; min-height: 1rem; margin-top: 0.25rem; text-align: center; }
+
+    /* ── QR display ── */
+    .qr-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .merchant { color: var(--muted); font-size: 0.82rem; font-weight: 600; }
+
+    .qr-outer {
+      position: relative;
+      padding: 3px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #2563eb, #7c3aed, #2563eb);
+      background-size: 200% 200%;
+      animation: qrBorderSpin 3s linear infinite;
+      box-shadow: 0 8px 30px rgba(37,99,235,0.3);
+    }
+    @keyframes qrBorderSpin {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .qr-outer.expired { animation: none; background: #d1d5db; box-shadow: none; }
+
+    .qr-frame {
+      width: 216px; height: 216px;
+      padding: 10px;
+      border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      background: #fff;
+    }
+    .qr-frame img { width: 192px; height: 192px; object-fit: contain; display: block; border-radius: 6px; }
+    .qr-frame .qr-empty { color: var(--muted); font-size: 0.8rem; text-align: center; padding: 1rem; max-width: 180px; line-height: 1.4; }
+    .qr-outer.expired .qr-frame { opacity: 0.85; filter: grayscale(0.4); }
+
+    /* Network badge */
+    .network-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border-radius: 999px;
+      padding: 0.28rem 0.8rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .network-badge.fonepay  { background: #fff0f0; color: var(--fp-red); border: 1.5px solid rgba(208,2,27,0.25); }
+    .network-badge.nepalpay { background: #f0f4ff; color: var(--np-blue); border: 1.5px solid rgba(26,79,160,0.25); }
+    .network-badge svg { width: 14px; height: 14px; }
+
+    /* Pay amount badge */
+    .pay-amount-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+      border: 1.5px solid #86efac;
+      border-radius: 999px;
+      padding: 0.4rem 1rem;
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #15803d;
+      box-shadow: 0 2px 8px rgba(22,163,74,0.2);
+    }
+    .pay-amount-badge .pa-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #166534;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Timer */
+    .timer {
+      font-size: 2.2rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #0f172a;
+      letter-spacing: 1px;
+    }
+    .timer.warn { color: var(--danger); animation: timerPulse 0.8s ease-in-out infinite; }
+    @keyframes timerPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.6; transform:scale(0.97); } }
+
+    .timer-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+
+    .progress { height: 5px; background: #e5e7eb; border-radius: 999px; overflow: hidden; width: 100%; margin-top: 0.4rem; }
+    .progress > span { display: block; height: 100%; background: linear-gradient(90deg, #2563eb, #7c3aed); width: 100%; transition: width 1s linear; }
+
+    .poll-status {
+      font-size: 0.73rem;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 0.4rem;
+      min-height: 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+    }
+    .poll-dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--primary);
+      animation: dotBounce 1.2s ease-in-out infinite;
+    }
+    .poll-dot:nth-child(2) { animation-delay: 0.2s; }
+    .poll-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dotBounce { 0%,60%,100% { transform:translateY(0); } 30% { transform:translateY(-4px); } }
+
+    .status-banner {
+      display: none;
+      margin-top: 1rem;
+      padding: 0.875rem 1rem;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-align: center;
+      animation: bannerIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+    .status-banner.show    { display: block; }
+    .status-banner.expired { background: #fef2f2; color: var(--danger); border: 1.5px solid #fecaca; }
+    .status-banner.success {
+      background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+      color: #15803d;
+      border: 1.5px solid #86efac;
+      box-shadow: 0 4px 20px rgba(22,163,74,0.2);
+    }
+    .status-banner.failed  { background: #fef2f2; color: var(--danger); border: 1.5px solid #fecaca; }
+    @keyframes bannerIn {
+      from { opacity:0; transform:scale(0.92); }
+      to   { opacity:1; transform:scale(1); }
+    }
+
+    .meta { font-size: 0.77rem; color: var(--muted); text-align: center; margin-top: 1.25rem; }
+    .meta strong { color: #374151; }
+    .helper { font-size: 0.77rem; color: var(--muted); margin-top: 0.75rem; text-align: center; line-height: 1.45; }
+
+    /* Divider */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .divider::before, .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Footer trust row */
+    .trust-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin-top: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.68rem;
+      color: #9ca3af;
+      font-weight: 600;
+    }
+    .trust-item svg { width: 12px; height: 12px; opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <div class="particles" aria-hidden="true">
+    <span class="particle"></span>
+    <span class="particle"></span>
+    <span class="particle"></span>
+    <span class="particle"></span>
+    <span class="particle"></span>
+    <span class="particle"></span>
+    <span class="particle"></span>
+    <span class="particle"></span>
+  </div>
+
+  <main class="card" role="main">
+
+    <!-- Brand header -->
+    <div class="brand">
+      <div class="brand-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="3"/>
+          <path d="M2 10h20"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>PayGate</h1>
+        <p>Secure QR Payments</p>
+      </div>
+      <div class="secure-badge" aria-label="Secured connection">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        SECURED
+      </div>
+    </div>
+
+    <!-- ── STEP 1: Amount ── -->
+    <section class="step active" id="step-amount" aria-label="Enter payment amount">
+      <div class="step-dots">
+        <span class="dot active"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+      <h2>Payment amount</h2>
+      <p class="subtitle">Enter the exact amount you are paying.</p>
+      <form id="amountForm" novalidate>
+        <label for="amountInput">Amount (NPR)</label>
+        <div class="amount-wrap">
+          <span class="currency-prefix">Rs.</span>
+          <input type="number" id="amountInput" inputmode="decimal"
+                 placeholder="0.00" min="1" step="0.01" autocomplete="off" />
+        </div>
+        <p class="error" id="amountErr" role="alert"></p>
+        <button type="submit" class="btn btn-primary">
+          Continue &rarr;
+        </button>
+      </form>
+      <div class="trust-row">
+        <span class="trust-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          256-bit SSL
+        </span>
+        <span class="trust-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          Real-time verify
+        </span>
+        <span class="trust-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          PCI compliant
+        </span>
+      </div>
+    </section>
+
+    <!-- ── STEP 2: Mobile ── -->
+    <section class="step" id="step-mobile" aria-label="Enter mobile number">
+      <div class="step-dots">
+        <span class="dot done"></span>
+        <span class="dot active"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+      <h2>Your mobile number</h2>
+      <p class="subtitle">We'll match this with your payment confirmation.</p>
+      <form id="mobileForm" novalidate>
+        <label for="mobile">Mobile number</label>
+        <div class="phone-wrap">
+          <span id="cc" class="cc-prefix">🇳🇵 +977</span>
+          <input type="tel" id="mobile" inputmode="numeric" autocomplete="tel"
+                 placeholder="98XXXXXXXX" maxlength="10" aria-describedby="mobileErr" />
+        </div>
+        <p class="error" id="mobileErr" role="alert"></p>
+        <button type="submit" class="btn btn-primary">Continue &rarr;</button>
+      </form>
+      <p class="helper">Your number is used only to match this payment session.</p>
+    </section>
+
+    <!-- ── STEP 3: Choose network ── -->
+    <section class="step" id="step-choose" aria-label="Choose payment network">
+      <div class="step-dots">
+        <span class="dot done"></span>
+        <span class="dot done"></span>
+        <span class="dot active"></span>
+        <span class="dot"></span>
+      </div>
+      <h2>Choose payment method</h2>
+      <p class="subtitle">Select the QR network you'll scan to pay.</p>
+
+      <div class="qr-choice-grid">
+
+        <!-- FonePay card -->
+        <div class="qr-choice-card" id="choiceFonePay" role="button" tabindex="0" aria-pressed="false">
+          <div class="choice-check">
+            <svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 6 5 9 10 3"/></svg>
+          </div>
+          <div class="logo-wrap">
+            <!-- FonePay logo SVG -->
+            <svg viewBox="0 0 260 100" xmlns="http://www.w3.org/2000/svg">
+              <!-- Red rounded rectangle -->
+              <rect x="0" y="10" width="130" height="80" rx="14" fill="#d0021b"/>
+              <!-- "fone" text in white -->
+              <text x="12" y="68" font-family="Arial Black,Arial,sans-serif" font-size="44" font-weight="900" fill="#ffffff">fone</text>
+              <!-- Signal arc -->
+              <path d="M122 28 Q135 20 148 28" stroke="#ffffff" stroke-width="5" fill="none" stroke-linecap="round"/>
+              <path d="M126 38 Q135 32 144 38" stroke="#ffffff" stroke-width="5" fill="none" stroke-linecap="round"/>
+              <circle cx="135" cy="46" r="4" fill="#ffffff"/>
+              <!-- "pay" text in black -->
+              <text x="136" y="68" font-family="Arial Black,Arial,sans-serif" font-size="44" font-weight="900" fill="#111111">pay</text>
+            </svg>
+          </div>
+          <div class="choice-sub">fonepay.com</div>
+        </div>
+
+        <!-- NepalPay card -->
+        <div class="qr-choice-card" id="choiceNepalPay" role="button" tabindex="0" aria-pressed="false">
+          <div class="choice-check">
+            <svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 6 5 9 10 3"/></svg>
+          </div>
+          <div class="logo-wrap">
+            <!-- NepalPay logo SVG -->
+            <svg viewBox="0 0 280 90" xmlns="http://www.w3.org/2000/svg">
+              <!-- Outer border rectangle -->
+              <rect x="2" y="2" width="276" height="62" rx="12" fill="none" stroke="#1a4fa0" stroke-width="3.5"/>
+              <!-- Left bracket accent -->
+              <path d="M14 14 L4 14 L4 48 L14 48" stroke="#e8192c" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <!-- nEPAL in red -->
+              <text x="22" y="50" font-family="Arial Black,Arial,sans-serif" font-size="38" font-weight="900" fill="#e8192c">nEPAL</text>
+              <!-- PAY in blue -->
+              <text x="148" y="50" font-family="Arial Black,Arial,sans-serif" font-size="38" font-weight="900" fill="#1a4fa0">PAY</text>
+              <!-- Tagline -->
+              <text x="140" y="82" font-family="Arial,sans-serif" font-size="11" fill="#1a4fa0" text-anchor="middle">नेपालको आफ्नै QR</text>
+            </svg>
+          </div>
+          <div class="choice-sub">nchl.com.np</div>
+        </div>
+
+      </div>
+      <p class="choice-err" id="choiceErr" role="alert"></p>
+      <button type="button" class="btn btn-primary" id="choiceConfirmBtn">Continue &rarr;</button>
+    </section>
+
+    <!-- ── STEP 4: QR display ── -->
+    <section class="step" id="step-qr" aria-label="Scan QR to pay">
+      <div class="step-dots">
+        <span class="dot done"></span>
+        <span class="dot done"></span>
+        <span class="dot done"></span>
+        <span class="dot active"></span>
+      </div>
+      <h2>Scan to pay</h2>
+      <p class="subtitle">Open your payment app and scan the QR below.</p>
+
+      <div class="qr-box">
+        <div class="network-badge" id="networkBadge"></div>
+        <div class="merchant" id="merchant"></div>
+
+        <div class="qr-outer" id="qrOuter">
+          <div class="qr-frame" id="qrFrame">
+            <img id="qrImg" alt="Payment QR code" hidden />
+            <div class="qr-empty" id="qrEmpty">No QR configured for this network.</div>
+          </div>
+        </div>
+
+        <div class="pay-amount-badge" id="payAmountBadge">
+          <span class="pa-label">Pay</span>
+          <span id="payAmountValue">Rs. 0</span>
+        </div>
+
+        <div class="timer-label" style="margin-top:0.5rem">Time remaining</div>
+        <div class="timer" id="timer" aria-live="polite">03:00</div>
+        <div class="progress"><span id="progressBar"></span></div>
+
+        <div class="poll-status" id="pollStatus">
+          <span class="poll-dot"></span>
+          <span class="poll-dot"></span>
+          <span class="poll-dot"></span>
+        </div>
+      </div>
+
+      <div class="status-banner" id="statusBanner" role="status"></div>
+      <button type="button" class="btn btn-ghost" id="cancelBtn" style="margin-top:1.25rem">Cancel</button>
+      <p class="meta">Mobile: <strong id="mobileEcho">-</strong></p>
+    </section>
+
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var COUNTDOWN_SECONDS = 10 * 60;   // 10 minutes — gives enough time to scan & pay
+      var POLL_INTERVAL_MS  = 3000;      // poll every 3 s (reduces server load)
+
+      var WEBHOOK_URL = (function () {
+        var path = location.pathname.replace(/\/[^/]*$/, '/').replace(/\/+/g, '/');
+        var url = location.origin + path + 'webhook.php';
+        console.log('[PayGate] Webhook URL:', url);
+        return url;
+      })();
+
+      // ── Element refs ─────────────────────────────────────────────────────
+      var stepAmount  = document.getElementById("step-amount");
+      var stepMobile  = document.getElementById("step-mobile");
+      var stepChoose  = document.getElementById("step-choose");
+      var stepQr      = document.getElementById("step-qr");
+
+      var amountForm  = document.getElementById("amountForm");
+      var amountInput = document.getElementById("amountInput");
+      var amountErr   = document.getElementById("amountErr");
+
+      var form      = document.getElementById("mobileForm");
+      var ccEl      = document.getElementById("cc");
+      var mobileEl  = document.getElementById("mobile");
+      var mobileErr = document.getElementById("mobileErr");
+
+      var choiceFonePay    = document.getElementById("choiceFonePay");
+      var choiceNepalPay   = document.getElementById("choiceNepalPay");
+      var choiceErr        = document.getElementById("choiceErr");
+      var choiceConfirmBtn = document.getElementById("choiceConfirmBtn");
+
+      var networkBadge   = document.getElementById("networkBadge");
+      var merchantEl     = document.getElementById("merchant");
+      var qrOuter        = document.getElementById("qrOuter");
+      var qrFrame        = document.getElementById("qrFrame");
+      var qrImg          = document.getElementById("qrImg");
+      var qrEmpty        = document.getElementById("qrEmpty");
+      var payAmountBadge = document.getElementById("payAmountBadge");
+      var payAmountValue = document.getElementById("payAmountValue");
+      var timerEl        = document.getElementById("timer");
+      var progressBar    = document.getElementById("progressBar");
+      var pollStatus     = document.getElementById("pollStatus");
+      var statusBanner   = document.getElementById("statusBanner");
+      var cancelBtn      = document.getElementById("cancelBtn");
+      var mobileEcho     = document.getElementById("mobileEcho");
+
+      // ── State ────────────────────────────────────────────────────────────
+      var remaining      = COUNTDOWN_SECONDS;
+      var tickHandle     = null;
+      var pollHandle     = null;
+      var activeMobile   = "";
+      var activeAmount   = "";
+      var activeNetwork  = "";
+      var resolved       = false;
+      var selectedNetwork = "";
+
+      // ── Helpers ──────────────────────────────────────────────────────────
+      function pad(n) { return n < 10 ? "0" + n : "" + n; }
+      function fmt(s) { return pad(Math.floor(s / 60)) + ":" + pad(s % 60); }
+
+      function showStep(el) {
+        [stepAmount, stepMobile, stepChoose, stepQr].forEach(function(s) {
+          s.classList.remove("active");
+        });
+        el.classList.add("active");
+      }
+
+      function setBanner(text, type) {
+        statusBanner.textContent = text;
+        statusBanner.className   = "status-banner show " + type;
+      }
+      function clearBanner() {
+        statusBanner.className   = "status-banner";
+        statusBanner.textContent = "";
+      }
+
+      function fmtAmount(v) {
+        var n = parseFloat(v);
+        if (isNaN(n)) return v;
+        return "Rs. " + n.toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      function setPollStatusWaiting() {
+        pollStatus.innerHTML =
+          '<span class="poll-dot"></span>' +
+          '<span class="poll-dot"></span>' +
+          '<span class="poll-dot"></span>';
+      }
+
+      function setPollStatusText(text) {
+        pollStatus.innerHTML = '<span style="font-size:.73rem;color:var(--muted)">' + text + '</span>';
+      }
+
+      // ── Step 1: Amount ────────────────────────────────────────────────────
+      amountForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var raw = parseFloat(amountInput.value);
+        if (isNaN(raw) || raw <= 0) {
+          amountErr.textContent = "Please enter a valid amount greater than 0.";
+          amountInput.focus();
+          return;
+        }
+        activeAmount = String(raw);
+        amountErr.textContent = "";
+        showStep(stepMobile);
+        mobileEl.focus();
+      });
+
+      // ── Step 2: Mobile ────────────────────────────────────────────────────
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var raw = mobileEl.value.trim();
+        if (!raw) {
+          mobileErr.textContent = "Please enter your mobile number.";
+          mobileEl.focus();
+          return;
+        }
+        if (raw.replace(/\D/g, "").length !== 10) {
+          mobileErr.textContent = "Enter a valid 10-digit Nepali mobile number.";
+          mobileEl.focus();
+          return;
+        }
+        mobileErr.textContent = "";
+        activeMobile = raw.replace(/\D/g, "");
+        showStep(stepChoose);
+      });
+
+      // ── Step 3: Choose network ────────────────────────────────────────────
+      function selectNetwork(network) {
+        selectedNetwork = network;
+        choiceFonePay.classList.toggle("selected",  network === "fonepay");
+        choiceNepalPay.classList.toggle("selected", network === "nepalpay");
+        choiceFonePay.setAttribute("aria-pressed",  String(network === "fonepay"));
+        choiceNepalPay.setAttribute("aria-pressed", String(network === "nepalpay"));
+        choiceErr.textContent = "";
+      }
+
+      choiceFonePay.addEventListener("click",  function() { selectNetwork("fonepay"); });
+      choiceNepalPay.addEventListener("click", function() { selectNetwork("nepalpay"); });
+
+      [choiceFonePay, choiceNepalPay].forEach(function(el) {
+        el.addEventListener("keydown", function(e) {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.click(); }
+        });
+      });
+
+      choiceConfirmBtn.addEventListener("click", function () {
+        if (!selectedNetwork) {
+          choiceErr.textContent = "Please choose a payment method.";
+          return;
+        }
+        activeNetwork = selectedNetwork;
+        launchQrStep();
+      });
+
+      // ── Step 4: QR display ────────────────────────────────────────────────
+      function launchQrStep() {
+        // (sessionStart removed — no time filter, match on mobile+amount only)
+        resolved     = false;
+
+        mobileEcho.textContent     = "+977 " + activeMobile;
+        payAmountValue.textContent = fmtAmount(activeAmount);
+
+        // Network badge
+        if (activeNetwork === "fonepay") {
+          networkBadge.className   = "network-badge fonepay";
+          networkBadge.innerHTML   =
+            '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#d0021b"/></svg>FonePay';
+        } else {
+          networkBadge.className   = "network-badge nepalpay";
+          networkBadge.innerHTML   =
+            '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#1a4fa0"/></svg>NepalPay';
+        }
+
+        // Restore hidden elements
+        timerEl.style.display        = "";
+        progressBar.parentElement.style.display = "";
+        document.querySelector(".timer-label").style.display = "";
+        pollStatus.style.display     = "";
+        qrOuter.style.display        = "";
+        merchantEl.style.display     = "";
+        networkBadge.style.display   = "";
+        payAmountBadge.style.display = "";
+        cancelBtn.style.display      = "";
+        mobileEcho.parentElement.style.display = "";
+        statusBanner.style.whiteSpace = "";
+        statusBanner.style.fontSize   = "";
+        statusBanner.style.padding    = "";
+
+        qrOuter.classList.remove("expired");
+        clearBanner();
+        timerEl.classList.remove("warn");
+        progressBar.style.width      = "100%";
+        progressBar.style.background = "";
+        cancelBtn.textContent        = "Cancel";
+        setPollStatusWaiting();
+
+        // Fetch config from server — show loading state, retry once on failure
+        merchantEl.textContent = "";
+        qrImg.hidden   = true;
+        qrEmpty.hidden = false;
+        qrEmpty.textContent = "Loading QR…";
+
+        function doFetchConfig(attempt) {
+          fetch(WEBHOOK_URL + "?action=get_config&_t=" + Date.now(), {
+            cache: "no-store"          // never serve a cached/stale response
+          })
+            .then(function (r) {
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              return r.json();
+            })
+            .then(function (d) {
+              merchantEl.textContent = (d.ok && d.merchantName) ? d.merchantName : "";
+              var qr = d.ok
+                ? (activeNetwork === "nepalpay" ? (d.nepalpayQrImage || "") : (d.qrImage || ""))
+                : "";
+              if (!qr && attempt < 2) {
+                // Server returned OK but empty QR — retry once after 1.5 s
+                // (can happen if server-side write hasn't committed yet)
+                setTimeout(function () { doFetchConfig(attempt + 1); }, 1500);
+              } else {
+                renderQRImage(qr);
+                if (!qr) {
+                  qrEmpty.textContent = "No QR configured. Ask the merchant to set it up in admin.";
+                }
+              }
+            })
+            .catch(function (err) {
+              console.warn("[PayGate] get_config failed (attempt " + attempt + "):", err);
+              if (attempt < 2) {
+                setTimeout(function () { doFetchConfig(attempt + 1); }, 2000);
+              } else {
+                qrEmpty.hidden = false;
+                qrEmpty.textContent = "Could not load QR. Check your connection and refresh.";
+                qrImg.hidden = true;
+              }
+            });
+        }
+        doFetchConfig(1);
+
+        showStep(stepQr);
+        startTimer();
+        startPolling();
+      }
+
+      // ── QR image ─────────────────────────────────────────────────────────
+      function renderQRImage(qrImage) {
+        if (qrImage) {
+          qrImg.src      = qrImage;
+          qrImg.hidden   = false;
+          qrEmpty.hidden = true;
+        } else {
+          qrImg.removeAttribute("src");
+          qrImg.hidden   = true;
+          qrEmpty.hidden = false;
+        }
+        qrOuter.classList.remove("expired");
+      }
+
+      // ── Timer ────────────────────────────────────────────────────────────
+      function startTimer() {
+        clearInterval(tickHandle);
+        remaining = COUNTDOWN_SECONDS;
+        updateTimerUI();
+        tickHandle = setInterval(function () {
+          remaining -= 1;
+          if (remaining <= 0) {
+            remaining = 0;
+            updateTimerUI();
+            clearInterval(tickHandle);
+            if (!resolved) onExpire();
+          } else {
+            updateTimerUI();
+          }
+        }, 1000);
+      }
+
+      function updateTimerUI() {
+        timerEl.textContent = fmt(remaining);
+        progressBar.style.width = (remaining / COUNTDOWN_SECONDS * 100) + "%";
+        if (remaining <= 60) {
+          timerEl.classList.add("warn");
+          progressBar.style.background = "linear-gradient(90deg, #dc2626, #f97316)";
+        } else {
+          timerEl.classList.remove("warn");
+          progressBar.style.background = "";
+        }
+      }
+
+      function onExpire() {
+        resolved = true;
+        stopPolling();
+        qrOuter.classList.add("expired");
+        setPollStatusText("");
+        statusBanner.style.whiteSpace = "pre-line";
+        setBanner(
+          "⏱ Time expired. The QR is still valid — tap Refresh to restart the timer, or Start Over to change your details.",
+          "expired"
+        );
+        cancelBtn.textContent = "🔄 Refresh Timer";
+        cancelBtn.onclick = function () {
+          // restart timer and polling without changing mobile/amount/network
+          cancelBtn.textContent = "Cancel";
+          cancelBtn.onclick = null;
+          cancelBtn.addEventListener("click", resetToStart);
+          qrOuter.classList.remove("expired");
+          clearBanner();
+          resolved = false;
+          startTimer();
+          startPolling();
+          setPollStatusWaiting();
+        };
+        // Also add a secondary "Start Over" link
+        var startOverBtn = document.createElement("button");
+        startOverBtn.type = "button";
+        startOverBtn.className = "btn btn-ghost";
+        startOverBtn.style.marginTop = "0.5rem";
+        startOverBtn.textContent = "Start Over";
+        startOverBtn.id = "startOverBtn";
+        cancelBtn.insertAdjacentElement("afterend", startOverBtn);
+        startOverBtn.addEventListener("click", function() {
+          var el = document.getElementById("startOverBtn");
+          if (el) el.remove();
+          cancelBtn.onclick = null;
+          resetToStart();
+        });
+      }
+
+      // ── Polling ───────────────────────────────────────────────────────────
+      function digitsOnly(s) { return s.replace(/\D/g, ""); }
+
+      function mobileMatches(webhookMobile, enteredDigits) {
+        // The app sends masked numbers like "980****120"
+        // Strip non-digits: "980****120" → "980120"
+        // We only reliably have the last 3 digits from the masked number
+        // so match on last 3 only.
+        var w = digitsOnly(webhookMobile);   // e.g. "980120"  from "980****120"
+        var e = digitsOnly(enteredDigits);   // e.g. "9804558884" entered by customer
+        if (w.length < 3 || e.length < 3) return false;
+        return w.slice(-3) === e.slice(-3);
+      }
+
+      function amountMatches(webhookAmount, enteredAmount) {
+        var w = parseFloat(webhookAmount);
+        var e = parseFloat(enteredAmount);
+        if (isNaN(w) || isNaN(e)) return false;
+        return Math.abs(w - e) <= 1.0;
+      }
+
+      function startPolling() {
+        clearInterval(pollHandle);
+        pollHandle = setInterval(pollWebhook, POLL_INTERVAL_MS);
+        pollWebhook();
+      }
+
+      function stopPolling() {
+        clearInterval(pollHandle);
+        pollHandle = null;
+      }
+
+      function pollWebhook() {
+        if (resolved) { stopPolling(); return; }
+
+        fetch(WEBHOOK_URL + "?action=poll_payments&limit=50&_t=" + Date.now())
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (resolved) return;
+            if (!data.ok || !Array.isArray(data.payments)) return;
+
+            console.log('[PayGate] Poll: ' + data.payments.length + ' records | mobile=' + activeMobile + ' amount=' + activeAmount);
+
+            for (var i = 0; i < data.payments.length; i++) {
+              var p = data.payments[i];
+              var mMatch = mobileMatches(p.mobile, activeMobile);
+              var aMatch = amountMatches(p.amount, activeAmount);
+              console.log('[PayGate] Check: mobile=' + p.mobile + ' amount=' + p.amount + ' success=' + p.success + ' | mobileMatch=' + mMatch + ' amountMatch=' + aMatch);
+              if (mMatch && aMatch) {
+                // Claim this payment server-side so it can't match another session
+                fetch(WEBHOOK_URL + "?action=claim_payment", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id: p.id })
+                }).catch(function() {}); // fire-and-forget; don't block UI
+                onPaymentResult(p.success);
+                return;
+              }
+            }
+          })
+          .catch(function (err) {
+            console.warn('[PayGate] Poll error:', err);
+          });
+      }
+
+      function onPaymentResult(success) {
+        resolved = true;
+        stopPolling();
+        clearInterval(tickHandle);
+        setPollStatusText("");
+
+        if (success) {
+          qrOuter.style.display        = "none";
+          merchantEl.style.display     = "none";
+          networkBadge.style.display   = "none";
+          payAmountBadge.style.display = "none";
+          timerEl.style.display        = "none";
+          progressBar.parentElement.style.display = "none";
+          document.querySelector(".timer-label").style.display = "none";
+          cancelBtn.style.display      = "none";
+          mobileEcho.parentElement.style.display = "none";
+
+          statusBanner.style.fontSize   = "1.15rem";
+          statusBanner.style.padding    = "1.75rem 1rem";
+          statusBanner.style.whiteSpace = "pre-line";
+          setBanner("✓ Payment successful!\nThank you.", "success");
+        } else {
+          qrOuter.classList.add("expired");
+          setBanner("Payment failed or could not be verified.", "failed");
+          cancelBtn.textContent = "Try Again";
+        }
+      }
+
+      // ── Cancel ────────────────────────────────────────────────────────────
+      cancelBtn.addEventListener("click", resetToStart);
+
+      function resetToStart() {
+        clearInterval(tickHandle);
+        stopPolling();
+        resolved = false; activeMobile = ""; activeAmount = ""; activeNetwork = ""; selectedNetwork = "";
+        clearBanner();
+
+        // Clean up any dynamically added "Start Over" button from onExpire
+        var el = document.getElementById("startOverBtn");
+        if (el) el.remove();
+        cancelBtn.onclick = null;
+        cancelBtn.textContent = "Cancel";
+
+        choiceFonePay.classList.remove("selected");
+        choiceNepalPay.classList.remove("selected");
+        choiceFonePay.setAttribute("aria-pressed", "false");
+        choiceNepalPay.setAttribute("aria-pressed", "false");
+        choiceErr.textContent = "";
+
+        timerEl.style.display        = "";
+        progressBar.parentElement.style.display = "";
+        document.querySelector(".timer-label").style.display = "";
+        pollStatus.style.display     = "";
+        qrOuter.style.display        = "";
+        merchantEl.style.display     = "";
+        networkBadge.style.display   = "";
+        payAmountBadge.style.display = "";
+        cancelBtn.style.display      = "";
+        mobileEcho.parentElement.style.display = "";
+        statusBanner.style.whiteSpace = "";
+        statusBanner.style.fontSize   = "";
+        statusBanner.style.padding    = "";
+
+        timerEl.classList.remove("warn");
+        cancelBtn.textContent = "Cancel";
+        setPollStatusWaiting();
+        amountInput.value = ""; amountErr.textContent = "";
+        mobileEl.value    = ""; mobileErr.textContent = "";
+
+        showStep(stepAmount);
+        amountInput.focus();
+      }
+
+      // ── Sanitisers ────────────────────────────────────────────────────────
+      mobileEl.addEventListener("input", function () {
+        mobileEl.value = mobileEl.value.replace(/[^\d]/g, "").slice(0, 10);
+        if (mobileErr.textContent) mobileErr.textContent = "";
+      });
+      amountInput.addEventListener("input", function () {
+        if (amountErr.textContent) amountErr.textContent = "";
+      });
+
+      amountInput.focus();
+    })();
+  </script>
+</body>
+</html>

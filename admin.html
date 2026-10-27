@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PayGate Admin</title>
+  <script src="storage.js"></script>
+  <style>
+    :root {
+      --bg-start:#0f172a; --bg-end:#1e3a8a; --card:#ffffff;
+      --primary:#2563eb; --primary-dark:#1d4ed8;
+      --success:#16a34a; --danger:#dc2626; --warn:#d97706;
+      --muted:#6b7280; --border:#e5e7eb;
+      --shadow:0 20px 45px rgba(0,0,0,.25);
+    }
+
+    /* ── Login overlay ── */
+    #loginOverlay {
+      position:fixed;inset:0;z-index:9999;
+      background:linear-gradient(135deg,#060d1f,#0d1f3c,#0a1628);
+      display:flex;align-items:center;justify-content:center;padding:1.5rem;
+    }
+    #loginOverlay.hidden { display:none; }
+    .login-card {
+      background:#1e293b;border-radius:20px;padding:2rem 1.875rem;
+      width:100%;max-width:400px;
+      border:1px solid rgba(255,255,255,0.08);
+      box-shadow:0 25px 60px rgba(0,0,0,0.5);
+      animation:loginRise 0.4s cubic-bezier(0.16,1,0.3,1) both;
+    }
+    @keyframes loginRise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    .login-brand{display:flex;align-items:center;gap:.6rem;margin-bottom:1.75rem}
+    .login-logo{width:42px;height:42px;border-radius:12px;
+                background:linear-gradient(135deg,#1d4ed8,#2563eb);
+                display:flex;align-items:center;justify-content:center;
+                box-shadow:0 4px 14px rgba(37,99,235,.45)}
+    .login-logo svg{width:22px;height:22px}
+    .login-title{font-size:1.1rem;font-weight:800;color:#f8fafc}
+    .login-sub{font-size:.75rem;color:#64748b;margin-top:.1rem}
+    .login-h2{font-size:1.05rem;font-weight:700;color:#e2e8f0;margin-bottom:.25rem}
+    .login-desc{font-size:.82rem;color:#64748b;margin-bottom:1.5rem;line-height:1.45}
+    .login-label{display:block;font-size:.75rem;font-weight:700;color:#94a3b8;
+                 margin:.85rem 0 .35rem;text-transform:uppercase;letter-spacing:.5px}
+    .login-input{
+      width:100%;background:#0f172a;border:1.5px solid #334155;border-radius:10px;
+      padding:.7rem .9rem;font-size:.95rem;color:#f8fafc;outline:none;
+      transition:border-color .15s,box-shadow .15s;
+    }
+    .login-input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.25)}
+    .login-input.totp{text-align:center;font-size:1.4rem;letter-spacing:8px;font-weight:700}
+    .login-btn{
+      width:100%;border:none;border-radius:10px;padding:.85rem;font-size:.95rem;
+      font-weight:700;cursor:pointer;margin-top:1.25rem;
+      background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;
+      box-shadow:0 4px 14px rgba(37,99,235,.4);transition:all .15s;
+    }
+    .login-btn:hover{box-shadow:0 6px 20px rgba(37,99,235,.5);transform:translateY(-1px)}
+    .login-btn:active{transform:scale(.98)}
+    .login-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+    .login-err{color:#f87171;font-size:.8rem;min-height:1.1rem;margin-top:.5rem;
+               text-align:center;font-weight:600}
+    .login-back{background:none;border:none;color:#64748b;font-size:.8rem;
+                cursor:pointer;margin-top:.75rem;width:100%;text-align:center}
+    .login-back:hover{color:#94a3b8}
+    .two-factor-badge{
+      display:inline-flex;align-items:center;gap:.3rem;
+      background:rgba(37,99,235,.15);border:1px solid rgba(37,99,235,.3);
+      border-radius:999px;padding:.2rem .65rem;font-size:.7rem;font-weight:700;
+      color:#93c5fd;margin-bottom:1rem;
+    }
+    .two-factor-badge svg{width:10px;height:10px}
+    .logout-btn{
+      background:none;border:1px solid var(--border);border-radius:8px;
+      padding:.35rem .75rem;font-size:.78rem;color:var(--muted);cursor:pointer;
+      transition:all .15s;
+    }
+    .logout-btn:hover{background:#f3f4f6;color:#374151}
+    .session-info{font-size:.75rem;color:#94a3b8;margin-left:.5rem}
+
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         min-height:100vh;padding:1.5rem 1rem;
+         background:linear-gradient(135deg,var(--bg-start),var(--bg-end));color:#111827}
+    .wrap{max-width:1100px;margin:0 auto}
+    .topbar{display:flex;align-items:center;justify-content:space-between;
+            color:#fff;margin-bottom:1.25rem;flex-wrap:wrap;gap:.5rem}
+    .brand{display:flex;align-items:center;gap:.5rem}
+    .brand .logo{width:36px;height:36px;border-radius:9px;background:var(--primary);
+                 color:#fff;display:flex;align-items:center;justify-content:center;
+                 font-weight:700;font-size:1.1rem}
+    .brand h1{font-size:1.2rem;font-weight:700}
+    .topbar .sub{color:#cbd5e1;font-size:.85rem}
+    .topbar a{color:#bfdbfe;font-size:.85rem;text-decoration:none}
+    .topbar a:hover{text-decoration:underline}
+    .grid{display:grid;grid-template-columns:340px 1fr;gap:1.25rem;align-items:start}
+    @media(max-width:820px){.grid{grid-template-columns:1fr}}
+    .card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:1.5rem}
+    .card h2{font-size:1.05rem;margin-bottom:.25rem}
+    .card .hint{color:var(--muted);font-size:.82rem;margin-bottom:1.1rem}
+    label{display:block;font-size:.8rem;font-weight:600;color:#374151;margin:.75rem 0 .3rem}
+    .field{width:100%;border:1.5px solid var(--border);border-radius:9px;
+           padding:.6rem .7rem;font-size:.95rem;outline:none;background:#fff;
+           transition:border-color .15s,box-shadow .15s}
+    .field:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    .err{color:var(--danger);font-size:.78rem;min-height:1rem;margin-top:.3rem}
+    .btn{border:none;border-radius:9px;padding:.6rem 1rem;font-size:.9rem;font-weight:600;
+         cursor:pointer;transition:background .15s,transform .05s}
+    .btn:active{transform:translateY(1px)}
+    .btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-dark)}
+    .btn-ghost{background:#f3f4f6;color:#374151}.btn-ghost:hover{background:#e5e7eb}
+    .btn-danger{background:var(--danger);color:#fff}.btn-danger:hover{background:#b91c1c}
+    .btn-row{display:flex;gap:.5rem;margin-top:1rem}
+    .preview-box{display:flex;flex-direction:column;align-items:center;margin-top:1.25rem;gap:.5rem}
+    .preview-box .qr-frame{width:180px;height:180px;padding:8px;
+      border:1.5px dashed var(--border);border-radius:12px;
+      display:flex;align-items:center;justify-content:center;background:#fff}
+    .preview-box .qr-frame img{width:160px;height:160px;object-fit:contain;display:block}
+    .preview-box .qr-frame .qr-empty{color:var(--muted);font-size:.78rem;padding:0 .4rem;text-align:center}
+    .preview-box .qr-file{font-size:.78rem;color:var(--muted)}
+    /* stats */
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-bottom:1rem}
+    .stat{background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:.6rem;text-align:center}
+    .stat .n{font-size:1.3rem;font-weight:700}
+    .stat .l{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .s-total .n{color:#111827}.s-success .n{color:var(--success)}
+    .s-pending .n{color:var(--warn)}.s-failed .n{color:var(--danger)}
+    .toolbar{display:flex;align-items:center;justify-content:space-between;
+             margin-bottom:.6rem;gap:.5rem;flex-wrap:wrap}
+    .toolbar .actions{display:flex;gap:.5rem}
+    .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px}
+    table{width:100%;border-collapse:collapse;font-size:.85rem}
+    thead th{background:#f3f4f6;text-align:left;padding:.55rem .7rem;
+             font-weight:600;color:#374151;white-space:nowrap}
+    tbody td{padding:.5rem .7rem;border-top:1px solid var(--border);vertical-align:middle}
+    tbody tr:hover{background:#f9fafb}
+    td.mono code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.78rem}
+    .muted{color:var(--muted);font-size:.78rem}
+    .when{color:var(--muted);font-size:.74rem;white-space:nowrap}
+    .badge{display:inline-block;padding:.15rem .5rem;border-radius:999px;
+           font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+    .b-success{background:#dcfce7;color:#166534}
+    .b-failed {background:#fee2e2;color:#991b1b}
+    .b-pending{background:#fef3c7;color:#92400e}
+    .empty{padding:1.5rem;text-align:center;color:var(--muted);font-size:.88rem}
+    .toast{font-size:.82rem;font-weight:600;min-height:1rem;margin-top:.6rem}
+    .toast.ok{color:var(--success)}.toast.bad{color:var(--danger)}
+    .del{background:none;border:none;color:var(--danger);cursor:pointer;font-size:.85rem}
+    .del:hover{text-decoration:underline}
+    .sync-bar{font-size:.78rem;color:var(--muted)}
+    .webhook-card{margin-top:1.25rem}
+  </style>
+</head>
+<body>
+
+<!-- ── Login overlay ── -->
+<div id="loginOverlay">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="3"/>
+          <path d="M2 10h20"/>
+        </svg>
+      </div>
+      <div>
+        <div class="login-title">PayGate Admin</div>
+        <div class="login-sub">Secure access required</div>
+      </div>
+    </div>
+
+    <!-- Step 1: Password -->
+    <div id="loginStep1">
+      <div class="two-factor-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        2FA Protected
+      </div>
+      <div class="login-h2">Enter your password</div>
+      <div class="login-desc">You'll be asked for your authenticator code next.</div>
+      <label class="login-label" for="loginPassword">Password</label>
+      <input class="login-input" type="password" id="loginPassword"
+             placeholder="••••••••" autocomplete="current-password" />
+      <div class="login-err" id="loginErr1"></div>
+      <button class="login-btn" id="loginNextBtn">Continue &rarr;</button>
+    </div>
+
+    <!-- Step 2: TOTP -->
+    <div id="loginStep2" style="display:none">
+      <div class="two-factor-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Step 2 of 2
+      </div>
+      <div class="login-h2">Authenticator code</div>
+      <div class="login-desc">Enter the 6-digit code from your authenticator app (Google Authenticator, Authy, etc.)</div>
+      <label class="login-label" for="loginTotp">6-digit code</label>
+      <input class="login-input totp" type="text" id="loginTotp"
+             inputmode="numeric" maxlength="6" placeholder="000000"
+             autocomplete="one-time-code" />
+      <div class="login-err" id="loginErr2"></div>
+      <button class="login-btn" id="loginSubmitBtn">Sign in</button>
+      <button class="login-back" id="loginBackBtn">&larr; Back</button>
+    </div>
+
+    <!-- Not set up notice -->
+    <div id="loginNotSetup" style="display:none">
+      <div class="login-h2" style="color:#fbbf24">⚠ Admin not configured</div>
+      <div class="login-desc" style="margin-top:.5rem">
+        Visit <strong>setup_admin.php</strong> to set your password and configure two-factor authentication.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">P</div>
+      <div>
+        <h1>PayGate Admin</h1>
+        <div class="sub">QR configuration &amp; payment records</div>
+      </div>
+    </div>
+    <a href="index.html">&larr; Customer payment page</a>
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <span class="session-info" id="sessionInfo"></span>
+      <button class="logout-btn" id="logoutBtn">Sign out</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- ── QR Config ── -->
+    <section class="card" aria-label="QR configuration">
+      <h2>QR Code Configuration</h2>
+      <p class="hint">Upload QR images for FonePay and NepalPay. Set the merchant name shown to customers.</p>
+
+      <label for="cfgMerchant">Merchant name</label>
+      <input class="field" id="cfgMerchant" type="text" placeholder="Acme Store" autocomplete="off" />
+
+      <!-- Two-column QR upload -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem">
+
+        <!-- FonePay QR -->
+        <div>
+          <div style="font-size:.8rem;font-weight:700;color:#374151;margin-bottom:.4rem">
+            FonePay QR
+          </div>
+          <input class="field" id="cfgQrFile" type="file" accept="image/*" style="font-size:.8rem;padding:.4rem .5rem" />
+          <p style="font-size:.72rem;color:var(--muted);margin-top:.25rem" id="qrFileNote">PNG/JPG, max 1.5 MB</p>
+          <div class="preview-box" style="margin-top:.5rem">
+            <div class="qr-frame" id="qrPreview" aria-label="FonePay QR preview">
+              <img id="qrPreviewImg" alt="FonePay QR preview" hidden />
+              <div class="qr-empty" id="qrPreviewEmpty">Not uploaded</div>
+            </div>
+            <button class="btn btn-ghost" id="removeQrBtn" type="button" style="margin-top:.4rem;padding:.35rem .7rem;font-size:.78rem">Remove</button>
+          </div>
+        </div>
+
+        <!-- NepalPay QR -->
+        <div>
+          <div style="font-size:.8rem;font-weight:700;color:#374151;margin-bottom:.4rem">
+            NepalPay QR
+          </div>
+          <input class="field" id="cfgNpQrFile" type="file" accept="image/*" style="font-size:.8rem;padding:.4rem .5rem" />
+          <p style="font-size:.72rem;color:var(--muted);margin-top:.25rem" id="npQrFileNote">PNG/JPG, max 1.5 MB</p>
+          <div class="preview-box" style="margin-top:.5rem">
+            <div class="qr-frame" id="npQrPreview" aria-label="NepalPay QR preview">
+              <img id="npQrPreviewImg" alt="NepalPay QR preview" hidden />
+              <div class="qr-empty" id="npQrPreviewEmpty">Not uploaded</div>
+            </div>
+            <button class="btn btn-ghost" id="removeNpQrBtn" type="button" style="margin-top:.4rem;padding:.35rem .7rem;font-size:.78rem">Remove</button>
+          </div>
+        </div>
+
+      </div>
+
+      <p class="err" id="cfgErr" role="alert"></p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="saveCfgBtn">Save configuration</button>
+        <button class="btn btn-ghost" id="resetCfgBtn">Reset</button>
+      </div>
+      <p class="toast" id="cfgToast" role="status"></p>
+    </section>
+
+    <!-- ── Payments ── -->
+    <section class="card" aria-label="Payments">
+      <h2>Payments</h2>
+      <p class="hint">All payments from the Android PayChecker app — successful, failed, and pending manual verification.</p>
+
+      <div class="stats">
+        <div class="stat s-total"><div class="n" id="stTotal">0</div><div class="l">Total</div></div>
+        <div class="stat s-success"><div class="n" id="stSuccess">0</div><div class="l">Success</div></div>
+        <div class="stat s-pending"><div class="n" id="stPending">0</div><div class="l">Pending</div></div>
+        <div class="stat s-failed"><div class="n" id="stFailed">0</div><div class="l">Failed</div></div>
+      </div>
+
+      <div class="toolbar">
+        <span class="sync-bar" id="lastSync">Not synced yet</span>
+        <div class="actions">
+          <button class="btn btn-ghost" id="refreshBtn">Refresh</button>
+          <button class="btn btn-danger" id="clearBtn">Clear all</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Mobile</th>
+              <th>Amount</th>
+              <th>RRN</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Received</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="paymentsBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="emptyState" style="display:none">No payments recorded yet.</div>
+      <p class="err" id="fetchErr" role="alert" style="margin-top:.5rem"></p>
+    </section>
+  </div>
+
+  <!-- ── Test Payment ── -->
+  <div class="card webhook-card" id="testPaymentCard">
+    <h2>Send Test Payment</h2>
+    <p class="hint">Simulate a payment being pushed by the Android app. Use this to confirm the server and auto-verification are working end-to-end.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-top:.5rem">
+      <div>
+        <label for="testMobile">Mobile number</label>
+        <input class="field" id="testMobile" type="text" placeholder="9704558884" maxlength="15" />
+      </div>
+      <div>
+        <label for="testAmount">Amount (NPR)</label>
+        <input class="field" id="testAmount" type="number" placeholder="100" min="1" step="0.01" />
+      </div>
+      <div>
+        <label for="testRrn">RRN / Transaction ID</label>
+        <input class="field" id="testRrn" type="text" placeholder="Auto-generated" />
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:1rem;margin-top:.75rem">
+      <label style="margin:0;display:flex;align-items:center;gap:.4rem;font-size:.85rem;font-weight:600;cursor:pointer">
+        <input type="checkbox" id="testSuccess" checked style="width:16px;height:16px" />
+        Mark as successful
+      </label>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="sendTestBtn">▶ Send test payment</button>
+    </div>
+    <p class="toast" id="testToast" role="status"></p>
+    <div id="testResult" style="margin-top:.75rem;font-size:.82rem;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;display:none;font-family:ui-monospace,monospace;white-space:pre-wrap;word-break:break-all"></div>
+  </div>
+  <!-- ── Debug Log ── -->
+  <div class="card webhook-card" id="debugLogCard">
+    <h2>🔍 Debug Log</h2>
+    <p class="hint">Shows every raw POST received by the server. Trigger a real payment from the Android app, then click Refresh Log to see exactly what was sent.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="refreshLogBtn">Refresh Log</button>
+      <button class="btn btn-ghost" id="clearLogBtn">Clear Log</button>
+    </div>
+    <p class="toast" id="logToast" role="status"></p>
+    <pre id="debugLogOutput" style="margin-top:.75rem;font-size:.78rem;background:#0f172a;color:#e2e8f0;border-radius:10px;padding:1rem;max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;display:none"></pre>
+  </div>
+
+  <div class="card webhook-card">
+    <h2>Webhook URL</h2>
+    <p class="hint">The URL where the Android PayChecker app sends payments. Auto-detected from this page's domain — only change this if your webhook is on a different server.</p>
+    <label for="webhookUrlInput">Webhook URL</label>
+    <input class="field" id="webhookUrlInput" type="url" placeholder="https://yourdomain.com/webhook.php" />
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveWebhookBtn">Save &amp; refresh</button>
+      <button class="btn btn-ghost" id="testWebhookBtn">Test connection</button>
+    </div>
+    <p class="toast" id="webhookToast" role="status"></p>
+  </div>
+
+</div><!-- /.wrap -->
+
+<script>
+(function () {
+  "use strict";
+
+  // ── Session management ──────────────────────────────────────────────────────
+  var SESSION_KEY = 'paygate_admin_token';
+
+  function getToken() {
+    try { return localStorage.getItem(SESSION_KEY) || ''; } catch(e) { return ''; }
+  }
+  function saveToken(t) {
+    try { localStorage.setItem(SESSION_KEY, t); } catch(e) {}
+  }
+  function clearToken() {
+    try { localStorage.removeItem(SESSION_KEY); } catch(e) {}
+  }
+
+  // Inject token into every fetch to the webhook
+  function apiFetch(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    opts.headers['X-Admin-Token'] = getToken();
+    return fetch(url, opts);
+  }
+
+  // ── Login UI ────────────────────────────────────────────────────────────────
+  var overlay     = document.getElementById('loginOverlay');
+  var step1       = document.getElementById('loginStep1');
+  var step2       = document.getElementById('loginStep2');
+  var notSetup    = document.getElementById('loginNotSetup');
+  var loginPw     = document.getElementById('loginPassword');
+  var loginTotp   = document.getElementById('loginTotp');
+  var loginErr1   = document.getElementById('loginErr1');
+  var loginErr2   = document.getElementById('loginErr2');
+  var loginNextBtn   = document.getElementById('loginNextBtn');
+  var loginSubmitBtn = document.getElementById('loginSubmitBtn');
+  var loginBackBtn   = document.getElementById('loginBackBtn');
+  var logoutBtn   = document.getElementById('logoutBtn');
+  var sessionInfo = document.getElementById('sessionInfo');
+
+  function showLoginStep(n) {
+    step1.style.display    = n === 1 ? '' : 'none';
+    step2.style.display    = n === 2 ? '' : 'none';
+    notSetup.style.display = n === 0 ? '' : 'none';
+    if (n === 1) { loginErr1.textContent = ''; loginPw.focus(); }
+    if (n === 2) { loginErr2.textContent = ''; loginTotp.value = ''; loginTotp.focus(); }
+  }
+
+  function showApp() {
+    overlay.classList.add('hidden');
+    sessionInfo.textContent = 'Session active';
+    loadConfigIntoForm();
+    initWebhookUrl();
+    fetchPayments();
+    setInterval(fetchPayments, 5000);
+  }
+
+  function checkAuth() {
+    var token = getToken();
+    if (!token) { showLoginStep(1); return; }
+    fetch(getWebhookUrl() + '?action=admin_check&token=' + encodeURIComponent(token))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.setup) { showLoginStep(0); return; }
+        if (d.valid)  { showApp(); }
+        else          { clearToken(); showLoginStep(1); }
+      })
+      .catch(function() { showLoginStep(1); });
+  }
+
+  loginNextBtn.addEventListener('click', function() {
+    var pw = loginPw.value;
+    if (!pw) { loginErr1.textContent = 'Enter your password.'; return; }
+    loginErr1.textContent = '';
+    loginNextBtn.disabled = true;
+    loginNextBtn.textContent = 'Checking…';
+
+    // Just advance to TOTP step — actual auth happens on final submit
+    // (password is validated server-side together with TOTP)
+    setTimeout(function() {
+      loginNextBtn.disabled = false;
+      loginNextBtn.textContent = 'Continue →';
+      showLoginStep(2);
+    }, 300);
+  });
+
+  loginPw.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') loginNextBtn.click();
+  });
+
+  loginBackBtn.addEventListener('click', function() { showLoginStep(1); });
+
+  loginTotp.addEventListener('input', function() {
+    loginTotp.value = loginTotp.value.replace(/\D/g,'').slice(0,6);
+    if (loginTotp.value.length === 6) loginSubmitBtn.click();
+  });
+
+  loginSubmitBtn.addEventListener('click', function() {
+    var pw   = loginPw.value;
+    var code = loginTotp.value.trim();
+    if (!code || code.length !== 6) { loginErr2.textContent = 'Enter the 6-digit code.'; return; }
+    loginErr2.textContent = '';
+    loginSubmitBtn.disabled = true;
+    loginSubmitBtn.textContent = 'Verifying…';
+
+    fetch(getWebhookUrl() + '?action=admin_login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw, totp: code })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      loginSubmitBtn.disabled = false;
+      loginSubmitBtn.textContent = 'Sign in';
+      if (d.ok) {
+        saveToken(d.token);
+        showApp();
+      } else if (d.code === 'NOT_SETUP') {
+        showLoginStep(0);
+      } else if (d.code === 'BAD_PASSWORD') {
+        showLoginStep(1);
+        loginErr1.textContent = 'Incorrect password.';
+      } else {
+        loginErr2.textContent = d.error || 'Authentication failed.';
+      }
+    })
+    .catch(function(e) {
+      loginSubmitBtn.disabled = false;
+      loginSubmitBtn.textContent = 'Sign in';
+      loginErr2.textContent = 'Request failed: ' + e.message;
+    });
+  });
+
+  logoutBtn.addEventListener('click', function() {
+    var token = getToken();
+    fetch(getWebhookUrl() + '?action=admin_logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
+      body: JSON.stringify({ token: token })
+    }).catch(function(){});
+    clearToken();
+    overlay.classList.remove('hidden');
+    showLoginStep(1);
+    loginPw.value = '';
+  });
+
+  // Handle 401 from API — redirect back to login
+  function handle401() {
+    clearToken();
+    overlay.classList.remove('hidden');
+    showLoginStep(1);
+  }
+
+  // ── QR Config ──────────────────────────────────────────────────────────────
+  var cfgMerchant    = document.getElementById("cfgMerchant");
+  var cfgQrFile      = document.getElementById("cfgQrFile");
+  var qrFileNote     = document.getElementById("qrFileNote");
+  var cfgNpQrFile    = document.getElementById("cfgNpQrFile");
+  var npQrFileNote   = document.getElementById("npQrFileNote");
+  var cfgErr         = document.getElementById("cfgErr");
+  var cfgToast       = document.getElementById("cfgToast");
+  var saveCfgBtn     = document.getElementById("saveCfgBtn");
+  var resetCfgBtn    = document.getElementById("resetCfgBtn");
+  var qrPreviewImg   = document.getElementById("qrPreviewImg");
+  var qrPreviewEmpty = document.getElementById("qrPreviewEmpty");
+  var removeQrBtn    = document.getElementById("removeQrBtn");
+  var npQrPreviewImg   = document.getElementById("npQrPreviewImg");
+  var npQrPreviewEmpty = document.getElementById("npQrPreviewEmpty");
+  var removeNpQrBtn    = document.getElementById("removeNpQrBtn");
+
+  var pendingQr    = null;  // null=unchanged, ""=clear, "data:..."=new
+  var pendingNpQr  = null;
+  var savedQrImage   = "";
+  var savedNpQrImage = "";
+  var MAX_FILE_BYTES   = 1.5 * 1024 * 1024;
+  var MAX_DATA_URL_LEN = 2 * 1000 * 1000;
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function pad(n) { return n < 10 ? "0"+n : ""+n; }
+  function fmtDate(iso) {
+    if (!iso) return "-";
+    var d = new Date(iso);
+    if (isNaN(d)) return iso;
+    return pad(d.getDate())+" "+d.toLocaleString(undefined,{month:"short"})+" "+
+           d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());
+  }
+  function toastCfg(msg, type) { cfgToast.textContent = msg; cfgToast.className = "toast "+(type||""); }
+
+  function renderPreview(imgEl, emptyEl, src) {
+    if (src) {
+      imgEl.src = src; imgEl.hidden = false; emptyEl.hidden = true;
+    } else {
+      imgEl.removeAttribute("src"); imgEl.hidden = true; emptyEl.hidden = false;
+    }
+  }
+
+  function setupFileInput(inputEl, noteEl, setPending, previewImg, previewEmpty) {
+    inputEl.addEventListener("change", function () {
+      var file = inputEl.files && inputEl.files[0];
+      if (!file) return;
+      cfgErr.textContent = "";
+      if (!file.type || file.type.indexOf("image/") !== 0) {
+        cfgErr.textContent = "Please choose an image file."; inputEl.value = ""; return;
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        cfgErr.textContent = "Image too large (max 1.5 MB)."; inputEl.value = ""; return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        if (reader.result.length > MAX_DATA_URL_LEN) {
+          cfgErr.textContent = "Image too large to store. Use a smaller file."; inputEl.value = ""; return;
+        }
+        setPending(reader.result);
+        noteEl.textContent = "Selected: " + file.name;
+        renderPreview(previewImg, previewEmpty, reader.result);
+      };
+      reader.onerror = function () { cfgErr.textContent = "Could not read file."; };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  setupFileInput(cfgQrFile, qrFileNote,
+    function(v) { pendingQr = v; },
+    qrPreviewImg, qrPreviewEmpty);
+
+  setupFileInput(cfgNpQrFile, npQrFileNote,
+    function(v) { pendingNpQr = v; },
+    npQrPreviewImg, npQrPreviewEmpty);
+
+  removeQrBtn.addEventListener("click", function () {
+    pendingQr = ""; cfgQrFile.value = "";
+    qrFileNote.textContent = "QR will be cleared when you save.";
+    renderPreview(qrPreviewImg, qrPreviewEmpty, "");
+  });
+
+  removeNpQrBtn.addEventListener("click", function () {
+    pendingNpQr = ""; cfgNpQrFile.value = "";
+    npQrFileNote.textContent = "QR will be cleared when you save.";
+    renderPreview(npQrPreviewImg, npQrPreviewEmpty, "");
+  });
+
+  function loadConfigIntoForm() {
+    apiFetch(getWebhookUrl() + "?action=get_config&_t=" + Date.now())
+      .then(function(r) {
+        if (r.status === 401) { handle401(); throw new Error('auth'); }
+        return r.json();
+      })
+      .then(function(d) {
+        if (!d.ok) return;
+        cfgMerchant.value = d.merchantName    || "";
+        savedQrImage      = d.qrImage         || "";
+        savedNpQrImage    = d.nepalpayQrImage  || "";
+        pendingQr = null; pendingNpQr = null;
+        cfgQrFile.value = ""; cfgNpQrFile.value = "";
+        qrFileNote.textContent  = "PNG/JPG, max 1.5 MB";
+        npQrFileNote.textContent = "PNG/JPG, max 1.5 MB";
+        renderPreview(qrPreviewImg,   qrPreviewEmpty,   savedQrImage);
+        renderPreview(npQrPreviewImg, npQrPreviewEmpty, savedNpQrImage);
+      })
+      .catch(function(e) { if (e.message !== 'auth') {
+        var cfg = PayGate.getConfig();
+        cfgMerchant.value = cfg.merchantName || "";
+      }});
+  }
+
+  saveCfgBtn.addEventListener("click", function () {
+    var name  = cfgMerchant.value.trim();
+    var qr    = pendingQr   !== null ? pendingQr   : savedQrImage;
+    var npqr  = pendingNpQr !== null ? pendingNpQr : savedNpQrImage;
+    if (!name) { cfgErr.textContent = "Merchant name is required."; return; }
+
+    // Guard: warn if QR data is too large (> 1.8 MB as a string — PHP default
+    // post_max_size is 8 MB but shared hosts often set it to 2 MB)
+    var totalBytes = (qr ? qr.length : 0) + (npqr ? npqr.length : 0);
+    if (totalBytes > 1.8 * 1024 * 1024) {
+      cfgErr.textContent = "QR image(s) are too large (" + Math.round(totalBytes / 1024) + " KB combined). Use smaller images (< 500 KB each).";
+      return;
+    }
+
+    cfgErr.textContent = "";
+    toastCfg("Saving…", "");
+
+    // Only include QR fields that changed (pendingQr !== null means changed/removed).
+    // Omitting a field entirely tells the server to keep the existing value.
+    var payload = { merchantName: name };
+    if (pendingQr   !== null) payload.qrImage         = pendingQr;
+    if (pendingNpQr !== null) payload.nepalpayQrImage  = pendingNpQr;
+
+    apiFetch(getWebhookUrl() + "?action=set_config", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(payload)
+    })
+    .then(function(r) {
+      if (r.status === 401) { handle401(); throw new Error('auth'); }
+      return r.json();
+    })
+    .then(function(d) {
+      if (!d.ok) throw new Error(d.error || "Save failed");
+      // Commit pending values to saved state
+      if (pendingQr   !== null) savedQrImage   = pendingQr;
+      if (pendingNpQr !== null) savedNpQrImage = pendingNpQr;
+      pendingQr = null; pendingNpQr = null;
+      cfgQrFile.value = ""; cfgNpQrFile.value = "";
+      qrFileNote.textContent  = "PNG/JPG, max 1.5 MB";
+      npQrFileNote.textContent = "PNG/JPG, max 1.5 MB";
+      toastCfg("Saved.", "ok");
+    })
+    .catch(function(e) {
+      cfgErr.textContent = "Could not save: " + e.message;
+      toastCfg("", "");
+    });
+  });
+
+  resetCfgBtn.addEventListener("click", function () {
+    loadConfigIntoForm(); cfgErr.textContent = ""; toastCfg("Reverted.", "");
+  });
+
+  // ── Webhook URL ─────────────────────────────────────────────────────────────
+  var WEBHOOK_KEY    = "paychecker_webhook_url";
+  var webhookUrlInput= document.getElementById("webhookUrlInput");
+  var saveWebhookBtn = document.getElementById("saveWebhookBtn");
+  var testWebhookBtn = document.getElementById("testWebhookBtn");
+  var webhookToast   = document.getElementById("webhookToast");
+
+  function getWebhookUrl() {
+    var saved = "";
+    try { saved = localStorage.getItem(WEBHOOK_KEY) || ""; } catch(e) {}
+    if (saved) return saved;
+    // Auto-detect: same path, replace filename with webhook.php
+    return location.origin + location.pathname.replace(/\/[^/]*$/, '/') + 'webhook.php';
+  }
+
+  function initWebhookUrl() {
+    webhookUrlInput.value = getWebhookUrl();
+  }
+
+  saveWebhookBtn.addEventListener("click", function () {
+    var u = webhookUrlInput.value.trim();
+    if (!u || (!u.startsWith("http://") && !u.startsWith("https://"))) {
+      webhookToast.textContent = "Enter a valid URL."; webhookToast.className = "toast bad"; return;
+    }
+    try { localStorage.setItem(WEBHOOK_KEY, u); } catch(e) {}
+    webhookToast.textContent = "Saved."; webhookToast.className = "toast ok";
+    fetchPayments();
+  });
+
+  testWebhookBtn.addEventListener("click", function () {
+    var u = webhookUrlInput.value.trim();
+    if (!u) return;
+    webhookToast.textContent = "Testing…"; webhookToast.className = "toast";
+    apiFetch(u + "?_t=" + Date.now())
+      .then(function(r) {
+        if (r.status === 401) { handle401(); throw new Error('auth'); }
+        return r.json();
+      })
+      .then(function(d) {
+        if (d.ok) {
+          webhookToast.textContent = "Connected. " + d.count + " payment(s) on server.";
+          webhookToast.className = "toast ok";
+        } else {
+          webhookToast.textContent = "Server responded but ok=false.";
+          webhookToast.className = "toast bad";
+        }
+      })
+      .catch(function(e) {
+        if (e.message !== 'auth') {
+          webhookToast.textContent = "Connection failed: " + e.message;
+          webhookToast.className = "toast bad";
+        }
+      });
+  });
+
+  // ── Payments table ──────────────────────────────────────────────────────────
+  var stTotal    = document.getElementById("stTotal");
+  var stSuccess  = document.getElementById("stSuccess");
+  var stPending  = document.getElementById("stPending");
+  var stFailed   = document.getElementById("stFailed");
+  var lastSync   = document.getElementById("lastSync");
+  var refreshBtn = document.getElementById("refreshBtn");
+  var clearBtn   = document.getElementById("clearBtn");
+  var paymentsBody = document.getElementById("paymentsBody");
+  var emptyState   = document.getElementById("emptyState");
+  var fetchErr     = document.getElementById("fetchErr");
+
+  function statusBadge(p) {
+    var isManual = (p.rrn || "").indexOf("MANUAL-") === 0;
+    if (isManual)  return '<span class="badge b-pending">Pending — Manual</span>';
+    if (p.success) return '<span class="badge b-success">Success</span>';
+    return                '<span class="badge b-failed">Failed</span>';
+  }
+
+  function sourceLabel(s) {
+    if (s === "sms")          return "SMS";
+    if (s === "notification") return "App";
+    if (s === "payment_gateway_timeout") return "Timeout";
+    return escapeHtml(s || "-");
+  }
+
+  function fetchPayments() {
+    var url = getWebhookUrl();
+    fetchErr.textContent = "";
+    apiFetch(url + "?limit=200&_t=" + Date.now())
+      .then(function(r) {
+        if (r.status === 401) { handle401(); throw new Error('auth'); }
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        if (!data.ok) throw new Error("Server returned ok=false");
+        renderPayments(data.payments || [], data.totals || null);
+        lastSync.textContent = "Last synced " + new Date().toLocaleTimeString();
+      })
+      .catch(function(e) {
+        fetchErr.textContent = "Could not load payments: " + e.message +
+          " — check the Webhook URL below.";
+        lastSync.textContent = "Sync failed";
+      });
+  }
+
+  function renderPayments(list, totals) {
+    if (!list.length) {
+      paymentsBody.innerHTML = "";
+      emptyState.style.display = "block";
+    } else {
+      emptyState.style.display = "none";
+      paymentsBody.innerHTML = list.map(function(p) {
+        var isManual = (p.rrn || "").indexOf("MANUAL-") === 0;
+        var rrnCell  = isManual
+          ? '<em style="color:var(--warn)">Manual verification required</em>'
+          : '<code>' + escapeHtml(p.rrn || "-") + '</code>';
+        return "<tr>" +
+          "<td>" + escapeHtml(p.mobile || "-") + "</td>" +
+          "<td>" + (p.amount ? "&#8377; " + escapeHtml(p.amount) : "<span class='muted'>—</span>") + "</td>" +
+          "<td class='mono'>" + rrnCell + "</td>" +
+          "<td><span class='muted'>" + sourceLabel(p.source) + "</span></td>" +
+          "<td>" + statusBadge(p) + "</td>" +
+          "<td class='when'>" + fmtDate(p.received_at || p.timestamp || "") + "</td>" +
+          "<td><button class='del' data-id='" + escapeHtml(p.id) + "'>Delete</button></td>" +
+          "</tr>";
+      }).join("");
+    }
+
+    // Stats — use server totals if available, else count locally
+    if (totals) {
+      var pending = list.filter(function(p) { return (p.rrn||"").indexOf("MANUAL-")===0; }).length;
+      var failed  = totals.failed - pending < 0 ? 0 : totals.failed - pending;
+      stTotal.textContent   = totals.total;
+      stSuccess.textContent = totals.successful;
+      stPending.textContent = pending;
+      stFailed.textContent  = failed;
+    } else {
+      var t=0, s=0, pen=0, f=0;
+      list.forEach(function(p) {
+        t++;
+        if ((p.rrn||"").indexOf("MANUAL-")===0) pen++;
+        else if (p.success) s++;
+        else f++;
+      });
+      stTotal.textContent=t; stSuccess.textContent=s;
+      stPending.textContent=pen; stFailed.textContent=f;
+    }
+  }
+
+  // Delete individual record — POST a delete request isn't in webhook.php yet,
+  // so we just re-fetch after a short message; add server-side delete if needed.
+  paymentsBody.addEventListener("click", function(e) {
+    if (e.target.classList.contains("del")) {
+      var id = e.target.getAttribute("data-id");
+      if (confirm("Remove this payment record from the view?\n(It will reappear on next sync unless deleted server-side.)")) {
+        // Remove from local view optimistically
+        e.target.closest("tr").remove();
+        // Re-count stats from remaining rows
+        var rows = Array.from(paymentsBody.querySelectorAll("tr"));
+        var t=rows.length, s=0, pen=0, f=0;
+        rows.forEach(function(r) {
+          var badge = r.querySelector(".badge");
+          if (!badge) return;
+          if (badge.classList.contains("b-success")) s++;
+          else if (badge.classList.contains("b-pending")) pen++;
+          else f++;
+        });
+        stTotal.textContent=t; stSuccess.textContent=s;
+        stPending.textContent=pen; stFailed.textContent=f;
+        if (!rows.length) emptyState.style.display = "block";
+      }
+    }
+  });
+
+  refreshBtn.addEventListener("click", fetchPayments);
+
+  clearBtn.addEventListener("click", function() {
+    if (confirm("This clears the local view. Payments on the server are NOT deleted.\nProceed?")) {
+      paymentsBody.innerHTML = "";
+      emptyState.style.display = "block";
+      stTotal.textContent = stSuccess.textContent = stPending.textContent = stFailed.textContent = "0";
+    }
+  });
+
+  // ── Test Payment ────────────────────────────────────────────────────────────
+  var testMobile  = document.getElementById("testMobile");
+  var testAmount  = document.getElementById("testAmount");
+  var testRrn     = document.getElementById("testRrn");
+  var testSuccess = document.getElementById("testSuccess");
+  var sendTestBtn = document.getElementById("sendTestBtn");
+  var testToast   = document.getElementById("testToast");
+  var testResult  = document.getElementById("testResult");
+
+  function randomRrn() {
+    return "TEST" + Math.random().toString(36).substring(2,10).toUpperCase();
+  }
+
+  sendTestBtn.addEventListener("click", function () {
+    var mobile = testMobile.value.trim().replace(/\D/g,"");
+    var amount = parseFloat(testAmount.value);
+    var rrn    = testRrn.value.trim() || randomRrn();
+    var success = testSuccess.checked;
+
+    if (!mobile || mobile.length < 7) {
+      testToast.textContent = "Enter a valid mobile number.";
+      testToast.className = "toast bad";
+      return;
+    }
+    if (isNaN(amount) || amount <= 0) {
+      testToast.textContent = "Enter a valid amount.";
+      testToast.className = "toast bad";
+      return;
+    }
+
+    testToast.textContent = "Sending…";
+    testToast.className = "toast";
+    testResult.style.display = "none";
+    sendTestBtn.disabled = true;
+
+    var payload = {
+      mobile:    mobile,
+      amount:    String(amount),
+      rrn:       rrn,
+      success:   success,
+      source:    "test",
+      timestamp: Date.now()
+    };
+
+    fetch(getWebhookUrl(), {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json().then(function(d) { return { status: r.status, body: d }; }); })
+    .then(function(res) {
+      sendTestBtn.disabled = false;
+      if (res.body.ok) {
+        testToast.textContent = "✓ Test payment sent! Check the customer page — it should auto-verify now.";
+        testToast.className = "toast ok";
+        testResult.style.display = "block";
+        testResult.textContent = "Sent:\n" + JSON.stringify(payload, null, 2) +
+          "\n\nServer response:\n" + JSON.stringify(res.body, null, 2);
+        fetchPayments(); // refresh the table
+      } else {
+        testToast.textContent = "Server rejected: " + (res.body.error || "unknown error");
+        testToast.className = "toast bad";
+        testResult.style.display = "block";
+        testResult.textContent = JSON.stringify(res.body, null, 2);
+      }
+    })
+    .catch(function(e) {
+      sendTestBtn.disabled = false;
+      testToast.textContent = "Request failed: " + e.message;
+      testToast.className = "toast bad";
+    });
+  });
+
+  // ── Debug Log ────────────────────────────────────────────────────────────────
+  var refreshLogBtn   = document.getElementById('refreshLogBtn');
+  var clearLogBtn     = document.getElementById('clearLogBtn');
+  var logToast        = document.getElementById('logToast');
+  var debugLogOutput  = document.getElementById('debugLogOutput');
+
+  refreshLogBtn.addEventListener('click', function() {
+    logToast.textContent = 'Loading…'; logToast.className = 'toast';
+    apiFetch(getWebhookUrl() + '?action=debug_log&_t=' + Date.now())
+      .then(function(r) {
+        if (r.status === 401) { handle401(); throw new Error('auth'); }
+        return r.json();
+      })
+      .then(function(d) {
+        debugLogOutput.style.display = 'block';
+        debugLogOutput.textContent   = d.log || '(empty)';
+        debugLogOutput.scrollTop     = debugLogOutput.scrollHeight;
+        logToast.textContent = d.size ? ('Log size: ' + Math.round(d.size/1024) + ' KB') : '';
+        logToast.className   = 'toast ok';
+      })
+      .catch(function(e) {
+        if (e.message !== 'auth') {
+          logToast.textContent = 'Failed: ' + e.message;
+          logToast.className = 'toast bad';
+        }
+      });
+  });
+
+  clearLogBtn.addEventListener('click', function() {
+    apiFetch(getWebhookUrl() + '?action=clear_debug_log', { method: 'POST' })
+      .then(function(r) {
+        if (r.status === 401) { handle401(); throw new Error('auth'); }
+        return r.json();
+      })
+      .then(function() {
+        debugLogOutput.textContent = '(cleared)';
+        logToast.textContent = 'Log cleared.'; logToast.className = 'toast ok';
+      })
+      .catch(function(e) {
+        if (e.message !== 'auth') {
+          logToast.textContent = 'Failed: ' + e.message;
+          logToast.className = 'toast bad';
+        }
+      });
+  });
+
+  // ── Init — check auth first, show app only if session is valid ──────────────
+  checkAuth();
+})();
+</script>
+</body>
+</html>
